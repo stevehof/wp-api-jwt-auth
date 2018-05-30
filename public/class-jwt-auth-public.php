@@ -95,6 +95,52 @@ class Jwt_Auth_Public
         }
     }
 
+
+    /**
+     * Internally used function, pass in the wordpress user to generate token
+     *
+     * @param [type] $user [description]
+     *
+     * @return [type] [description]
+     */
+    public function generate_token_for_user($user)
+    {
+        $secret_key = defined('JWT_AUTH_SECRET_KEY') ? JWT_AUTH_SECRET_KEY : false;
+
+        /** Valid credentials, the user exists create the according Token */
+        $issuedAt = time();
+        $notBefore = apply_filters('jwt_auth_not_before', $issuedAt, $issuedAt);
+        $expire = apply_filters('jwt_auth_expire', $issuedAt + (DAY_IN_SECONDS * 7), $issuedAt);
+
+        $token = array(
+            'iss' => get_bloginfo('url'),
+            'iat' => $issuedAt,
+            'nbf' => $notBefore,
+            'exp' => $expire,
+            'data' => array(
+                'user' => array(
+                    'id' => $user->data->ID,
+                ),
+            ),
+        );
+
+        /** Let the user modify the token data before the sign. */
+        $token = JWT::encode(apply_filters('jwt_auth_token_before_sign', $token, $user), $secret_key);
+
+        /** The token is signed, now create the object with no sensible user data to the client*/
+        $data = array(
+            'token' => $token,
+            'user_email' => $user->data->user_email,
+            'user_nicename' => $user->data->user_nicename,
+            'user_display_name' => $user->data->display_name,
+        );
+
+
+        /** Let the user modify the data before send it back */
+	    return $data;
+    }
+
+
     /**
      * Get the user and password in the request body and generate a JWT
      *
@@ -134,33 +180,7 @@ class Jwt_Auth_Public
         }
 
         /** Valid credentials, the user exists create the according Token */
-        $issuedAt = time();
-        $notBefore = apply_filters('jwt_auth_not_before', $issuedAt, $issuedAt);
-        $expire = apply_filters('jwt_auth_expire', $issuedAt + (DAY_IN_SECONDS * 7), $issuedAt);
-
-        $token = array(
-            'iss' => get_bloginfo('url'),
-            'iat' => $issuedAt,
-            'nbf' => $notBefore,
-            'exp' => $expire,
-            'data' => array(
-                'user' => array(
-                    'id' => $user->data->ID,
-                ),
-            ),
-        );
-
-        /** Let the user modify the token data before the sign. */
-        $token = JWT::encode(apply_filters('jwt_auth_token_before_sign', $token, $user), $secret_key);
-
-        /** The token is signed, now create the object with no sensible user data to the client*/
-        $data = array(
-            'token' => $token,
-            'user_email' => $user->data->user_email,
-            'user_nicename' => $user->data->user_nicename,
-            'user_display_name' => $user->data->display_name,
-        );
-
+        $data = $this->generate_token_for_user($user);
         /** Let the user modify the data before send it back */
         return apply_filters('jwt_auth_token_before_dispatch', $data, $user);
     }
@@ -333,3 +353,4 @@ class Jwt_Auth_Public
         return $request;
     }
 }
+
